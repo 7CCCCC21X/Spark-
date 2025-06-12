@@ -18,70 +18,100 @@ textarea{width:100%;max-width:620px;height:140px;resize:vertical;font-size:14px;
 .btn{margin-top:12px;background:var(--blue);color:#fff;padding:10px 26px;border:none;border-radius:8px;
      font-size:15px;cursor:pointer;transition:.18s background}
 .btn:hover{background:var(--blue-dark)} .btn:disabled{opacity:.6;cursor:not-allowed}
-table{width:100%;max-width:820px;border-collapse:collapse;margin-top:24px;background:var(--card);border-radius:10px;overflow:hidden}
+table{width:100%;max-width:900px;border-collapse:collapse;margin-top:24px;background:var(--card);border-radius:10px;overflow:hidden}
 th,td{padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;font-size:14px}
 th{background:#f0f4ff;font-weight:600}
 tbody tr:last-child td{border-bottom:none}
 small{color:var(--sub)}
 #progress{margin-top:10px;font-size:14px;color:var(--sub)}
+footer{margin-top:40px;font-size:13px;color:var(--sub)}
+a{color:var(--blue);text-decoration:none}
 </style>
 </head>
 <body>
 <h1>SPK Airdrop 批量查询</h1>
 
-<textarea id="addrInput" placeholder="一行一个钱包地址(0x…)"></textarea>
+<textarea id="addrInput" placeholder="一行一个钱包地址 (0x…)"></textarea>
 <button id="queryBtn" class="btn">批量查询</button>
 <div id="progress"></div>
 
 <table style="display:none">
-  <thead><tr>
-    <th>#</th><th>地址</th><th>可领取/已领取</th><th>原始返回 JSON</th>
-  </tr></thead>
+  <thead>
+    <tr><th>#</th><th>地址</th><th>可领取 SPK</th><th>原始返回 JSON</th></tr>
+  </thead>
   <tbody id="resultBody"></tbody>
 </table>
 
+<footer>Made by <a href="https://x.com/0xXIAOc" target="_blank">@0xXIAOc</a></footer>
+
 <script>
-const input=document.getElementById('addrInput');
-const btn=document.getElementById('queryBtn');
-const tbody=document.getElementById('resultBody');
-const table=tbody.parentElement;
-const progress=document.getElementById('progress');
+const input   = document.getElementById('addrInput');
+const btn     = document.getElementById('queryBtn');
+const tbody   = document.getElementById('resultBody');
+const table   = tbody.parentElement;
+const progress= document.getElementById('progress');
 
-function fmtNum(n){return (+n).toLocaleString(undefined,{maximumFractionDigits:4});}
+const fmt = n => (+n).toLocaleString(undefined,{maximumFractionDigits:4});
 
-btn.onclick=async()=>{
-  const addrs=[...new Set(input.value.trim().split(/\s+/).filter(a=>/^0x[a-fA-F0-9]{40}$/.test(a)))]
+/* ---------- 从各种可能格式里取出 SPK 数量 ---------- */
+function getAmount(json){
+  if(Array.isArray(json) && json.length){
+    return Number(json[0].amount_normalized||0);
+  }
+  // 旧格式兜底
+  return Number(json.claimable ?? json.claimable_amount ?? 0);
+}
+
+btn.onclick = async () => {
+  const addrs = [...new Set(input.value.trim()
+                .split(/\s+/)
+                .filter(a => /^0x[a-fA-F0-9]{40}$/.test(a)))];
+
   if(!addrs.length){alert('请先输入有效地址');return;}
-  btn.disabled=true;tbody.innerHTML='';table.style.display='none';
-  progress.textContent=`正在查询 0 / ${addrs.length} …`;
 
-  let done=0,idx=1;
+  // 初始化
+  btn.disabled = true;
+  tbody.innerHTML = '';
+  table.style.display = 'none';
+  progress.textContent = `正在查询 0 / ${addrs.length} …`;
+
+  let idx = 1, done = 0;
+  let addrWithReward = 0, totalReward = 0;
+
   for(const addr of addrs){
     try{
-      const r=await fetch(`https://spark2-api.blockanalitica.com/api/v1/spk-airdrop/${addr}/`,
-                          {headers:{'accept':'application/json'}});
-      const j=await r.json();
-      // 你可以根据接口返回字段自行调整
-      const claimable=j.claimable??j.claimable_amount??j.claim_bal??0;
-      const claimed  =j.claimed??j.claimed_amount??j.claimed_bal??0;
+      const res = await fetch(
+        `https://spark2-api.blockanalitica.com/api/v1/spk-airdrop/${addr}/`,
+        { headers:{accept:'application/json'} }
+      );
+      const data = await res.json();
+      const amt  = getAmount(data);
 
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td>${idx++}</td>
-                    <td><small>${addr}</small></td>
-                    <td>${fmtNum(claimable)} / ${fmtNum(claimed)}</td>
-                    <td><small>${JSON.stringify(j)}</small></td>`;
+      if(amt > 0){
+        addrWithReward++;
+        totalReward += amt;
+      }
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${idx++}</td>
+                      <td><small>${addr}</small></td>
+                      <td>${fmt(amt)}</td>
+                      <td><small>${JSON.stringify(data)}</small></td>`;
       tbody.appendChild(tr);
     }catch(e){
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td>${idx++}</td><td><small>${addr}</small></td>
-                    <td colspan="2" style="color:#e11d48;">查询失败：${e.message}</td>`;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${idx++}</td>
+                      <td><small>${addr}</small></td>
+                      <td colspan="2" style="color:#e11d48;">查询失败：${e.message}</td>`;
       tbody.appendChild(tr);
     }
-    progress.textContent=`正在查询 ${++done} / ${addrs.length} …`;
+    progress.textContent = `正在查询 ${++done} / ${addrs.length} …`;
   }
-  progress.textContent='查询完成 ✔️';
-  table.style.display='';
-  btn.disabled=false;
+
+  // 汇总
+  progress.textContent = `查询完成 ✔️｜总地址 ${addrs.length} ｜可领取 ${addrWithReward} ｜总量 ${fmt(totalReward)} SPK`;
+  table.style.display  = '';
+  btn.disabled = false;
 };
 </script>
 </body>
