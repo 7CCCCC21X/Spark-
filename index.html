@@ -10,16 +10,29 @@
   --border:#e5e7eb;--text:#222;--sub:#666
 }
 html,body{margin:0;padding:0;height:100%}
-body{font-family:-apple-system,Segoe UI,PingFang SC,Helvetica,Arial,sans-serif;
-     background:var(--bg);color:var(--text);display:flex;flex-direction:column;align-items:center;padding:24px}
+body{
+  font-family:-apple-system,Segoe UI,PingFang SC,Helvetica,Arial,sans-serif;
+  background:var(--bg);color:var(--text);
+  display:flex;flex-direction:column;align-items:center;padding:24px
+}
 h1{margin:0 0 20px;font-size:26px;color:var(--blue)}
-textarea{width:100%;max-width:620px;height:140px;resize:vertical;font-size:14px;padding:10px;
-         border:1px solid var(--border);border-radius:8px;box-sizing:border-box}
-.btn{margin-top:12px;background:var(--blue);color:#fff;padding:10px 26px;border:none;border-radius:8px;
-     font-size:15px;cursor:pointer;transition:.18s background}
+textarea{
+  width:100%;max-width:620px;height:140px;resize:vertical;font-size:14px;padding:10px;
+  border:1px solid var(--border);border-radius:8px;box-sizing:border-box
+}
+.btn{
+  margin-top:12px;background:var(--blue);color:#fff;padding:10px 26px;border:none;border-radius:8px;
+  font-size:15px;cursor:pointer;transition:.18s background
+}
 .btn:hover{background:var(--blue-dark)} .btn:disabled{opacity:.6;cursor:not-allowed}
-table{width:100%;max-width:900px;border-collapse:collapse;margin-top:24px;background:var(--card);border-radius:10px;overflow:hidden}
-th,td{padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;font-size:14px}
+table{
+  width:100%;max-width:900px;border-collapse:collapse;margin-top:24px;background:var(--card);
+  border-radius:10px;overflow:hidden
+}
+th,td{
+  padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;font-size:14px;
+  vertical-align:top
+}
 th{background:#f0f4ff;font-weight:600}
 tbody tr:last-child td{border-bottom:none}
 small{color:var(--sub)}
@@ -37,7 +50,7 @@ a{color:var(--blue);text-decoration:none}
 
 <table style="display:none">
   <thead>
-    <tr><th>#</th><th>地址</th><th>可领取 SPK</th><th>原始返回 JSON</th></tr>
+    <tr><th>#</th><th>地址</th><th>可领取 SPK</th><th>奖励拆分</th></tr>
   </thead>
   <tbody id="resultBody"></tbody>
 </table>
@@ -53,23 +66,32 @@ const progress= document.getElementById('progress');
 
 const fmt = n => (+n).toLocaleString(undefined,{maximumFractionDigits:4});
 
-/* ---------- 从各种可能格式里取出 SPK 数量 ---------- */
+/* ---------- 获取 amount ---------- */
 function getAmount(json){
   if(Array.isArray(json) && json.length){
-    return Number(json[0].amount_normalized||0);
+    return Number(json[0].amount_normalized || 0);
   }
-  // 旧格式兜底
   return Number(json.claimable ?? json.claimable_amount ?? 0);
 }
 
+/* ---------- 提取分组奖励 ---------- */
+function shortInfo(d){
+  const g = (Array.isArray(d)?d[0]:d).groups || [];
+  const m = Object.fromEntries(g.map(o=>[o.tag, o.value]));
+  return `
+    <div>layer3: ${m.layer3_reward ?? 0}</div>
+    <div>aave&nbsp;&nbsp;: ${m.aave_reward ?? 0}</div>
+    <div>sparklend: ${m.sparklend_reward ?? 0}</div>
+  `;
+}
+
 btn.onclick = async () => {
-  const addrs = [...new Set(input.value.trim()
-                .split(/\s+/)
-                .filter(a => /^0x[a-fA-F0-9]{40}$/.test(a)))];
+  const addrs = [...new Set(
+    input.value.trim().split(/\s+/).filter(a => /^0x[a-fA-F0-9]{40}$/.test(a))
+  )];
 
   if(!addrs.length){alert('请先输入有效地址');return;}
 
-  // 初始化
   btn.disabled = true;
   tbody.innerHTML = '';
   table.style.display = 'none';
@@ -80,7 +102,7 @@ btn.onclick = async () => {
 
   for(const addr of addrs){
     try{
-      const res = await fetch(
+      const res  = await fetch(
         `https://spark2-api.blockanalitica.com/api/v1/spk-airdrop/${addr}/`,
         { headers:{accept:'application/json'} }
       );
@@ -92,25 +114,27 @@ btn.onclick = async () => {
         totalReward += amt;
       }
 
+      // -------- table row (方案 A: tooltip 显示完整 JSON) --------
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${idx++}</td>
-                      <td><small>${addr}</small></td>
-                      <td>${fmt(amt)}</td>
-                      <td><small>${JSON.stringify(data)}</small></td>`;
+      tr.innerHTML = `
+        <td>${idx++}</td>
+        <td><small>${addr.slice(0,6)}…${addr.slice(-4)}</small></td>
+        <td>${fmt(amt)}</td>
+        <td title='${JSON.stringify(data)}'>${shortInfo(data)}</td>`;
       tbody.appendChild(tr);
     }catch(e){
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${idx++}</td>
-                      <td><small>${addr}</small></td>
+                      <td><small>${addr.slice(0,6)}…${addr.slice(-4)}</small></td>
                       <td colspan="2" style="color:#e11d48;">查询失败：${e.message}</td>`;
       tbody.appendChild(tr);
     }
     progress.textContent = `正在查询 ${++done} / ${addrs.length} …`;
   }
 
-  // 汇总
-  progress.textContent = `查询完成 ✔️｜总地址 ${addrs.length} ｜可领取 ${addrWithReward} ｜总量 ${fmt(totalReward)} SPK`;
-  table.style.display  = '';
+  progress.textContent =
+    `查询完成 ✔️｜总地址 ${addrs.length} ｜可领取 ${addrWithReward} ｜总量 ${fmt(totalReward)} SPK`;
+  table.style.display = '';
   btn.disabled = false;
 };
 </script>
