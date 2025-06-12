@@ -12,45 +12,61 @@
 html,body{margin:0;padding:0;height:100%}
 body{
   font-family:-apple-system,Segoe UI,PingFang SC,Helvetica,Arial,sans-serif;
-  background:var(--bg);color:var(--text);
-  display:flex;flex-direction:column;align-items:center;padding:24px
+  background:var(--bg);color:var(--text);display:flex;flex-direction:column;
+  align-items:center;padding:28px 16px
 }
-h1{margin:0 0 20px;font-size:26px;color:var(--blue)}
+h1{margin:0 0 24px;font-size:28px;color:var(--blue);text-align:center}
+
+/* ---- 输入区域 ---- */
+.input-wrap{
+  width:100%;max-width:720px;background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:20px;box-shadow:0 3px 6px rgba(0,0,0,.05);
+  display:flex;flex-direction:column;gap:12px
+}
 textarea{
-  width:100%;max-width:620px;height:140px;resize:vertical;font-size:14px;padding:10px;
-  border:1px solid var(--border);border-radius:8px;box-sizing:border-box
+  height:150px;resize:vertical;font-size:15px;line-height:1.4;padding:10px;
+  border:1px solid var(--border);border-radius:8px;box-sizing:border-box;
+  font-family:Menlo,Consolas,monospace
 }
 .btn{
-  margin-top:12px;background:var(--blue);color:#fff;padding:10px 26px;border:none;border-radius:8px;
-  font-size:15px;cursor:pointer;transition:.18s background
+  align-self:flex-end;background:var(--blue);color:#fff;padding:10px 28px;border:none;
+  border-radius:8px;font-size:15px;cursor:pointer;transition:.18s background
 }
 .btn:hover{background:var(--blue-dark)} .btn:disabled{opacity:.6;cursor:not-allowed}
+
+/* ---- 进度 ---- */
+#progress{margin:14px 0;font-size:14px;color:var(--sub)}
+
+/* ---- 表格 ---- */
 table{
-  width:100%;max-width:900px;border-collapse:collapse;margin-top:24px;background:var(--card);
+  width:100%;max-width:960px;border-collapse:collapse;margin-top:10px;background:var(--card);
   border-radius:10px;overflow:hidden
 }
 th,td{
-  padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;font-size:14px;
-  vertical-align:top
+  padding:10px 14px;border-bottom:1px solid var(--border);
+  font-size:14px;text-align:left;vertical-align:top
 }
 th{background:#f0f4ff;font-weight:600}
 tbody tr:last-child td{border-bottom:none}
 small{color:var(--sub)}
-#progress{margin-top:10px;font-size:14px;color:var(--sub)}
-footer{margin-top:40px;font-size:13px;color:var(--sub)}
+.reward-col div{white-space:nowrap}
+footer{margin:40px 0 10px;font-size:13px;color:var(--sub)}
 a{color:var(--blue);text-decoration:none}
 </style>
 </head>
 <body>
 <h1>SPK Airdrop 批量查询</h1>
 
-<textarea id="addrInput" placeholder="一行一个钱包地址 (0x…)"></textarea>
-<button id="queryBtn" class="btn">批量查询</button>
+<div class="input-wrap">
+  <textarea id="addrInput" placeholder="一行一个钱包地址 (0x…)"></textarea>
+  <button id="queryBtn" class="btn">批量查询</button>
+</div>
+
 <div id="progress"></div>
 
 <table style="display:none">
   <thead>
-    <tr><th>#</th><th>地址</th><th>可领取 SPK</th><th>奖励拆分</th></tr>
+    <tr><th style="width:48px;">#</th><th style="width:190px;">地址</th><th style="width:120px;">可领取 SPK</th><th>奖励拆分</th></tr>
   </thead>
   <tbody id="resultBody"></tbody>
 </table>
@@ -66,23 +82,24 @@ const progress= document.getElementById('progress');
 
 const fmt = n => (+n).toLocaleString(undefined,{maximumFractionDigits:4});
 
-/* ---------- 获取 amount ---------- */
+/* ---------- 解析 amount ---------- */
 function getAmount(json){
   if(Array.isArray(json) && json.length){
-    return Number(json[0].amount_normalized || 0);
+    return Number(json[0]?.amount_normalized || 0);
   }
-  return Number(json.claimable ?? json.claimable_amount ?? 0);
+  return Number(json?.claimable ?? json?.claimable_amount ?? 0);
 }
 
-/* ---------- 提取分组奖励 ---------- */
-function shortInfo(d){
-  const g = (Array.isArray(d)?d[0]:d).groups || [];
-  const m = Object.fromEntries(g.map(o=>[o.tag, o.value]));
-  return `
-    <div>layer3: ${m.layer3_reward ?? 0}</div>
-    <div>aave&nbsp;&nbsp;: ${m.aave_reward ?? 0}</div>
-    <div>sparklend: ${m.sparklend_reward ?? 0}</div>
-  `;
+/* ---------- 奖励拆分 ---------- */
+function getGroups(json){
+  const arr = Array.isArray(json) ? json[0]?.groups : json?.groups;
+  if(!Array.isArray(arr)) return null;
+  const m = Object.fromEntries(arr.map(o=>[o.tag,o.value]));
+  return {
+    layer3 : m.layer3_reward   ?? 0,
+    aave   : m.aave_reward     ?? 0,
+    spark  : m.sparklend_reward?? 0
+  };
 }
 
 btn.onclick = async () => {
@@ -92,6 +109,7 @@ btn.onclick = async () => {
 
   if(!addrs.length){alert('请先输入有效地址');return;}
 
+  // 初始化
   btn.disabled = true;
   tbody.innerHTML = '';
   table.style.display = 'none';
@@ -108,26 +126,32 @@ btn.onclick = async () => {
       );
       const data = await res.json();
       const amt  = getAmount(data);
+      const g    = getGroups(data);
 
       if(amt > 0){
         addrWithReward++;
         totalReward += amt;
       }
 
-      // -------- table row (方案 A: tooltip 显示完整 JSON) --------
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
+      const row = document.createElement('tr');
+      row.innerHTML = `
         <td>${idx++}</td>
         <td><small>${addr.slice(0,6)}…${addr.slice(-4)}</small></td>
-        <td>${fmt(amt)}</td>
-        <td title='${JSON.stringify(data)}'>${shortInfo(data)}</td>`;
-      tbody.appendChild(tr);
+        <td>${amt>0?fmt(amt):'—'}</td>
+        <td class="reward-col" title='${JSON.stringify(data)}'>
+          ${ amt>0 && g
+              ? `<div>layer3: ${g.layer3}</div><div>aave&nbsp;&nbsp;: ${g.aave}</div><div>spark&nbsp;: ${g.spark}</div>`
+              : '无'}
+        </td>`;
+      tbody.appendChild(row);
+
     }catch(e){
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${idx++}</td>
-                      <td><small>${addr.slice(0,6)}…${addr.slice(-4)}</small></td>
-                      <td colspan="2" style="color:#e11d48;">查询失败：${e.message}</td>`;
-      tbody.appendChild(tr);
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${idx++}</td>
+        <td><small>${addr.slice(0,6)}…${addr.slice(-4)}</small></td>
+        <td colspan="2" style="color:#e11d48;">查询失败：${e.message}</td>`;
+      tbody.appendChild(row);
     }
     progress.textContent = `正在查询 ${++done} / ${addrs.length} …`;
   }
