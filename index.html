@@ -1,166 +1,239 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<meta charset="UTF-8">
-<title>SPK Airdrop 批量查询</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" href="m6gmk-44gfc-001.ico" type="image/x-icon"><!-- ← 新 logo -->
+  <meta charset="UTF-8">
+  <title>SPK Airdrop 批量查询</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <link rel="icon" href="m6gmk-44gfc-001.ico" type="image/x-icon">
 
-<style>
-:root{--blue:#0078d4;--blue-dark:#005fa3;--bg:#f9f9f9;--card:#fff;
-      --border:#e5e7eb;--txt:#222;--sub:#666;--error:#e11d48}
-html,body{margin:0;padding:0;height:100%}
-body{font-family:-apple-system,Segoe UI,PingFang SC,Helvetica,Arial,sans-serif;
-     background:var(--bg);color:var(--txt);display:flex;flex-direction:column;
-     align-items:center;padding:26px 16px}
-h1{margin:0 0 22px;font-size:28px;color:var(--blue)}
-.input-wrap{width:100%;max-width:760px;background:var(--card);border:1px solid var(--border);
-            border-radius:12px;padding:20px;box-shadow:0 4px 8px rgba(0,0,0,.04);
-            display:flex;flex-wrap:wrap;gap:12px}
-textarea{flex:1 1 100%;height:140px;resize:vertical;font:14px/1.4 Menlo,Consolas,monospace;
-         padding:10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box}
-.btn{background:var(--blue);color:#fff;padding:9px 26px;border:none;border-radius:8px;
-     font-size:15px;cursor:pointer;transition:.18s}
-.btn:hover{background:var(--blue-dark)} .btn:disabled{opacity:.55;cursor:not-allowed}
-#progress{margin:16px 0;font-size:14px;color:var(--sub)}
-.action-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-table{width:100%;max-width:980px;border-collapse:collapse;margin-top:12px;background:var(--card);
-      border-radius:10px;overflow:hidden}
-th,td{padding:10px 14px;border-bottom:1px solid var(--border);font-size:14px;text-align:left}
-th{background:#f0f4ff;font-weight:600} tbody tr:last-child td{border-bottom:none}
-.reward-col div{white-space:nowrap}
-small{color:var(--sub)}
-footer{margin:38px 0 8px;font-size:13px;color:var(--sub)}
-a{color:var(--blue);text-decoration:none}
-.highlight{background:rgba(0,120,212,.06)}
-.error{color:var(--error)}
-@media(max-width:560px){.btn{flex:1 1 auto}}
-</style>
+  <style>
+  :root{
+    --blue:#0078d4;        --blue-dark:#005fa3;
+    --green:#10b981;       --green-dark:#0f8a63;
+    --bg:#f9f9f9;          --card:#fff;           --border:#e5e7eb;
+    --txt:#222;            --sub:#666;           --error:#e11d48;
+  }
+  html,body{margin:0;padding:0;height:100%}
+  body{font-family:-apple-system,Segoe UI,PingFang SC,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--txt);display:flex;flex-direction:column;
+       align-items:center;padding:26px 16px}
+  h1{margin:0 0 22px;font-size:28px;color:var(--blue)}
+
+  .input-wrap{width:100%;max-width:760px;background:var(--card);border:1px solid var(--border);
+              border-radius:12px;padding:20px;box-shadow:0 4px 8px rgba(0,0,0,.04);
+              display:grid;grid-template-columns:1fr auto auto;gap:12px 16px}
+  textarea{grid-column:1/4;height:140px;resize:vertical;font:14px/1.4 Menlo,Consolas,monospace;
+           padding:10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box}
+
+  .btn{background:var(--blue);color:#fff;padding:9px 24px;border:none;border-radius:8px;
+       font-size:15px;cursor:pointer;transition:.18s}
+  .btn:hover{background:var(--blue-dark)} .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btn.secondary{background:var(--green)} .btn.secondary:hover{background:var(--green-dark)}
+
+  #progressBar{position:sticky;top:0;left:0;width:100%;height:4px;appearance:none;margin:0;background:#dbeafe}
+  #progressBar::-webkit-progress-bar{background:#dbeafe}
+  #progressBar::-webkit-progress-value{background:var(--blue)}
+  #stats{margin:8px 0 16px;font-size:14px;color:var(--sub)}
+
+  .action-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  /* =============== 结果表 (虚拟滚动容器) =============== */
+  #tableWrap{width:100%;max-width:980px;height:520px;overflow:auto;border-radius:10px;
+             background:var(--card);border:1px solid var(--border);display:none}
+  table{border-collapse:collapse;width:100%}
+  th,td{padding:10px 14px;border-bottom:1px solid var(--border);font-size:14px;text-align:left}
+  th{background:#f0f4ff;font-weight:600;position:sticky;top:0;z-index:2}
+  .highlight{background:rgba(0,120,212,.06)}
+  .reward-col div{white-space:nowrap}
+  .error{color:var(--error)}
+  @media(max-width:560px){.btn{padding:9px 14px;font-size:14px}}
+  </style>
 </head>
 
 <body>
 <h1>SPK Airdrop 批量查询</h1>
 
-<!-- ===== 输入区域 + 官方入口 ===== -->
 <div class="input-wrap">
   <textarea id="addrInput" placeholder="一行一个钱包地址 (0x…)"></textarea>
-
-  <!-- 官方领取按钮 -->
-  <a class="btn" href="https://app.spark.fi/SPK/airdrop" target="_blank" title="前往官方领取页面">
-    官方领取入口
-  </a>
-
-  <!-- 查询按钮 -->
+  <!-- 颜色区分：绿色【官方领取】，蓝色【批量查询】 -->
+  <a class="btn secondary" href="https://app.spark.fi/SPK/airdrop" target="_blank">官方领取入口</a>
   <button id="queryBtn" class="btn">批量查询</button>
 </div>
 
-<!-- ===== 统计 & 操作栏 ===== -->
+<progress id="progressBar" value="0" max="100"></progress>
+<div id="stats"></div>
 <div class="action-bar">
-  <div id="progress"></div>
-  <button id="copyBtn" class="btn" style="display:none;">复制有空投地址</button>
+  <button id="copyBtn"   class="btn" style="display:none;">复制有空投地址</button>
 </div>
 
-<!-- ===== 结果表格 ===== -->
-<table style="display:none">
-  <thead><tr>
-    <th style="width:56px;">#</th>
-    <th style="width:260px;">地址</th>
-    <th style="width:120px;">可领取 SPK</th>
-    <th>奖励拆分</th>
-  </tr></thead>
-  <tbody id="resultBody"></tbody>
-</table>
+<!-- 结果虚拟表 -->
+<div id="tableWrap">
+  <table>
+    <thead>
+      <tr><th style="width:56px;">#</th><th style="width:260px;">地址</th><th style="width:120px;">可领取 SPK</th><th>奖励拆分</th></tr>
+    </thead>
+    <tbody id="virtualBody"><!-- 行由 JS 注入 --></tbody>
+  </table>
+</div>
 
-<footer>
-  作者推特：<a href="https://x.com/0xXIAOc" target="_blank">@0xXIAOc</a>
-</footer>
+<footer>作者推特：<a href="https://x.com/0xXIAOc" target="_blank">@0xXIAOc</a></footer>
 
-<script>
-const input     = document.getElementById('addrInput');
-const btn       = document.getElementById('queryBtn');
-const tbody     = document.getElementById('resultBody');
-const table     = tbody.parentElement;
-const progress  = document.getElementById('progress');
-const copyBtn   = document.getElementById('copyBtn');
-const fmt       = n => (+n).toLocaleString(undefined,{maximumFractionDigits:4});
+<!-- ========== util.js ========== -->
+<script type="module" id="util">
+export const fmt = n => (+n).toLocaleString(undefined,{maximumFractionDigits:4});
 
-// 抽离接口解析
-const getAmount = j => Array.isArray(j)&&j.length
-      ? +j[0].amount_normalized
-      : +(j?.claimable ?? j?.claimable_amount ?? 0);
+export const getAmount = j =>
+  Array.isArray(j)&&j.length ? +j[0].amount_normalized : +(j?.claimable ?? j?.claimable_amount ?? 0);
 
-const getGroups = j=>{
+export const getGroups = j => {
   const arr = Array.isArray(j)?j[0]?.groups : j?.groups;
   if(!Array.isArray(arr)) return null;
   const m = Object.fromEntries(arr.map(o=>[o.tag,o.value]));
-  return {layer3:m.layer3_reward ?? 0,aave:m.aave_reward ?? 0,spark:m.sparklend_reward ?? 0};
+  return {layer3:m.layer3_reward??0,aave:m.aave_reward??0,spark:m.sparklend_reward??0};
 };
 
-/* ===== 主查询 ===== */
-btn.onclick = async ()=>{
-  const addrs=[...new Set(input.value.trim().split(/\s+/).filter(a=>/^0x[a-fA-F0-9]{40}$/.test(a)))];
-  if(!addrs.length){alert('请先输入有效地址');return;}
-
-  // 初始化
-  btn.disabled=true; tbody.innerHTML=''; table.style.display='none';
-  copyBtn.style.display='none'; copyBtn.disabled=true;
-  progress.textContent=`正在查询 0 / ${addrs.length} …`;
-
-  let idx=1,done=0,withCnt=0,total=0;
-  const eligible=[];
-
-  // 并发请求 → 再按输入顺序渲染
-  const promises=addrs.map(addr=>
-    fetch(`https://spark2-api.blockanalitica.com/api/v1/spk-airdrop/${addr}/`,
-          {headers:{accept:'application/json'}})
-      .then(r=>r.json())
-      .catch(e=>({error:e.message}))
-  );
-  const results = await Promise.all(promises);
-
-  results.forEach((dat,i)=>{
-    const addr = addrs[i];
-    let row = document.createElement('tr');
-
-    if(dat.error){
-      row.innerHTML = `
-        <td>${idx}</td>
-        <td style="font-family:Menlo,Consolas,monospace">${addr}</td>
-        <td colspan="2" class="error">查询失败：${dat.error}</td>`;
-    }else{
-      const amt = getAmount(dat);
-      const g   = getGroups(dat);
-
-      if(amt>0){row.classList.add('highlight');withCnt++;total+=amt;eligible.push(addr);}
-
-      row.innerHTML = `
-        <td>${idx}</td>
-        <td style="font-family:Menlo,Consolas,monospace">${addr}</td>
-        <td>${amt>0?fmt(amt):'—'}</td>
-        <td class="reward-col">
-          ${amt>0 && g
-              ? `<div>layer3 : ${g.layer3}</div>
-                 <div>aave&nbsp;&nbsp;: ${g.aave}</div>
-                 <div>spark&nbsp;: ${g.spark}</div>`
-              : (amt===0?'无':'加载中…')}
-        </td>`;
-    }
-    tbody.appendChild(row);
-    idx++; progress.textContent=`正在查询 ${++done} / ${addrs.length} …`;
-    if(table.style.display==='none') table.style.display='';
-  });
-
-  // 结果总结
-  progress.textContent=`查询完成 ✔️｜总地址 ${addrs.length} ｜可领取 ${withCnt} ｜总量 ${fmt(total)} SPK`;
-  if(eligible.length){
-    copyBtn.style.display=''; copyBtn.disabled=false;
-    copyBtn.onclick=()=>{
-      navigator.clipboard.writeText(eligible.join('\n'))
-        .then(()=>{copyBtn.textContent='已复制！';setTimeout(()=>copyBtn.textContent='复制有空投地址',1500);});
-    };
+/* ---- 错误分类 ---- */
+export function parseErr(r){
+  if(!r.ok){
+    if([403,429].includes(r.status))        throw new Error('API Rate-Limit，请稍后');
+    else                                    throw new Error(r.statusText);
   }
+  return r.json();
+}
+</script>
+
+<!-- ========== api.js ========== -->
+<script type="module" id="api">
+import {parseErr} from '#util';
+
+export async function fetchAirdrop(addr){
+  const r = await fetch(`https://spark2-api.blockanalitica.com/api/v1/spk-airdrop/${addr}/`,
+                        {headers:{accept:'application/json'}});
+  return parseErr(r);
+}
+</script>
+
+<!-- ========== ui.js 主逻辑 ========== -->
+<script type="module">
+import {fmt,getAmount,getGroups} from '#util';
+import {fetchAirdrop}            from '#api';
+
+const $ = s=>document.querySelector(s);
+const input  = $('#addrInput');
+const btn    = $('#queryBtn');
+const bar    = $('#progressBar');
+const stats  = $('#stats');
+const copyBt = $('#copyBtn');
+const tbody  = $('#virtualBody');
+const wrap   = $('#tableWrap');
+
+let results = [];           // {idx,addr,amt,groups,error}
+
+/* ===== 批量查询 ===== */
+btn.onclick = async()=>{
+  const list=[...new Set(input.value.trim().split(/\s+/).filter(a=>/^0x[a-f\d]{40}$/i.test(a)))];
+  if(!list.length) return alert('请先输入有效地址');
+
+  // init
+  results=[]; tbody.innerHTML=''; wrap.style.display='none';
+  copyBt.style.display='none'; copyBt.disabled=true;
+  bar.value=0; bar.max=list.length; stats.textContent='';
+  btn.disabled=true;
+
+  const fetchJobs = list.map((addr,i)=>queryOne(addr,i+1));
+  await Promise.all(fetchJobs);
+
+  finalize();
   btn.disabled=false;
 };
+
+/* 单地址查询并推入 results */
+async function queryOne(addr,idx){
+  let obj={idx,addr,amt:0,groups:null,error:null};
+  try{
+    const j = await fetchAirdrop(addr);
+    obj.amt = getAmount(j);
+    obj.groups = getGroups(j);
+    if(Array.isArray(j) && !j.length) obj.error='地址无记录';
+  }catch(e){ obj.error = e.message || '异常'; }
+
+  results.push(obj);
+  bar.value++;
+  stats.textContent=`正在查询 ${bar.value}/${bar.max}`;
+
+  // 即时渲染新行（虚拟化容器但先 append 占位）
+  const tr=document.createElement('tr'); tr.dataset.row=idx;
+  tbody.appendChild(tr);
+}
+
+/* ===== 结束后：汇总 & 开启虚拟滚动 ===== */
+function finalize(){
+  const withCnt = results.filter(r=>r.amt>0).length;
+  const total   = results.reduce((s,r)=>s+r.amt,0);
+  stats.textContent=`查询完成 ✔️｜总地址 ${results.length} ｜可领取 ${withCnt} ｜总量 ${fmt(total)} SPK`;
+  wrap.style.display='block';
+
+  if(withCnt){
+    const eligible = results.filter(r=>r.amt>0).map(r=>r.addr);
+    copyBt.style.display=''; copyBt.disabled=false;
+    copyBt.onclick=()=>navigator.clipboard.writeText(eligible.join('\n'))
+      .then(()=>{copyBt.textContent='已复制！';setTimeout(()=>copyBt.textContent='复制有空投地址',1500);});
+  }
+
+  startVirtualScroll();
+}
+
+/* ===== 轻量虚拟滚动 (≈30 行窗口) ===== */
+function startVirtualScroll(){
+  const rowH   = 46;                     // 表格行高 (含边框) ≈
+  const win    = $('#tableWrap');
+  const buffer = 15;                     // 上下缓冲行
+  render();                              // 初始渲染一屏
+
+  win.onscroll = throttle(render,60);
+
+  function render(){
+    const start = Math.max(0, Math.floor(win.scrollTop/rowH) - buffer);
+    const end   = Math.min(results.length, start + Math.ceil(win.clientHeight/rowH) + buffer*2);
+
+    // 只保留 start~end 区间节点
+    for(const tr of [...tbody.children]){
+      const i=+tr.dataset.row;
+      if(i<start+1 || i>end) tr.remove();
+    }
+
+    for(let i=start;i<end;i++){
+      if(!tbody.querySelector(`tr[data-row="${i+1}"]`)){
+        tbody.appendChild(buildRow(results[i]));
+      }
+    }
+  }
+}
+
+/* 行渲染 */
+function buildRow(r){
+  const tr=document.createElement('tr'); tr.dataset.row=r.idx;
+  if(r.amt>0) tr.className='highlight';
+  tr.innerHTML=r.error
+    ? `<td>${r.idx}</td><td style="font-family:Menlo,Consolas,monospace">${r.addr}</td>
+       <td colspan="2" class="error">${r.error}</td>`
+    : `<td>${r.idx}</td>
+       <td style="font-family:Menlo,Consolas,monospace">${r.addr}</td>
+       <td>${r.amt?fmt(r.amt):'—'}</td>
+       <td class="reward-col">${
+          r.amt && r.groups
+          ? `<div>layer3 : ${r.groups.layer3}</div>
+             <div>aave&nbsp;&nbsp;: ${r.groups.aave}</div>
+             <div>spark&nbsp;: ${r.groups.spark}</div>`
+          : (r.amt===0?'无':'加载中…')
+       }</td>`;
+  return tr;
+}
+
+/* 小节流工具 */
+function throttle(fn,ms){
+  let t=0; return()=>{const now=Date.now();if(now-t>ms){fn();t=now;}}
+}
 </script>
 </body>
 </html>
